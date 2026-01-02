@@ -1,0 +1,154 @@
+---
+- name: Install and configure SNMP Exporter with SNMPv3
+  hosts: snmp_exporter
+  become: true
+
+  vars:
+    ssh_user: ubuntu
+    ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICDYwpLcE5WtAWsvHSfJ3vOc/0ZLaG6vhGUiHpwG8UWr router"
+
+    snmp_exporter_version: "0.29.0"
+    snmp_exporter_arch: "linux-amd64"
+    snmp_exporter_port: 9116
+
+    snmp_v3_user: "Hero"
+    snmp_v3_auth_protocol: "SHA"
+    snmp_v3_auth_password: "Hero12345"
+    snmp_v3_priv_protocol: "AES"
+    snmp_v3_priv_password: "Hero12345"
+
+  tasks:
+    # ---------------- SSH BOOTSTRAP ----------------
+    - name: Install required system packages
+      apt:
+        name:
+          - wget
+          - curl
+          - git
+          - build-essential
+          - libsnmp-dev
+          - unzip
+          - golang-go
+          - openssh-server
+        state: present
+        update_cache: yes
+
+    - name: Enable and start SSH service
+      systemd:
+        name: ssh
+        enabled: yes
+        state: started
+
+    - name: Ensure SSH user exists
+      user:
+        name: "{{ ssh_user }}"
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Ensure .ssh directory exists with correct permissions
+      file:
+        path: "/home/{{ ssh_user }}/.ssh"
+        state: directory
+        owner: "{{ ssh_user }}"
+        group: "{{ ssh_user }}"
+        mode: '0700'
+
+    - name: Install authorized SSH key
+      authorized_key:
+        user: "{{ ssh_user }}"
+        key: "{{ ssh_public_key }}"
+        state: present
+
+    - name: Ensure authorized_keys permissions
+      file:
+        path: "/home/{{ ssh_user }}/.ssh/authorized_keys"
+        owner: "{{ ssh_user }}"
+        group: "{{ ssh_user }}"
+        mode: '0600'
+
+    # ---------------- SNMP EXPORTER ----------------
+    - name: Download SNMP Exporter
+      get_url:
+        url: "https://github.com/prometheus/snmp_exporter/releases/download/v{{ snmp_exporter_version }}/snmp_exporter-{{ snmp_exporter_version }}.{{ snmp_exporter_arch }}.tar.gz"
+        dest: /tmp/snmp_exporter.tar.gz
+        mode: '0644'
+
+    - name: Extract SNMP Exporter
+      unarchive:
+        src: /tmp/snmp_exporter.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Install SNMP Exporter binary
+      copy:
+        src: "/tmp/snmp_exporter-{{ snmp_exporter_version }}.{{ snmp_exporter_arch }}/snmp_exporter"
+        dest: /usr/local/bin/snmp_exporter
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create SNMP Exporter config directory
+      file:
+        path: /etc/snmp_exporter
+        state: directory
+        mode: '0755'
+
+    - name: Clone snmp_exporter repo (generator)
+      git:
+        repo: https://github.com/prometheus/snmp_exporter.git
+        dest: /opt/snmp_exporter
+        version: "v{{ snmp_exporter_version }}"
+        force: yes
+
+    - name: Deploy generator.yml
+      template:
+        src: ../templates/generator.yml.j2
+        dest: /opt/snmp_exporter/generator/generator.yml
+        mode: '0644'
+
+    - name: Generate snmp.yml
+      command: make generate
+      args:
+        chdir: /opt/snmp_exporter/generator
+      failed_when: false
+
+    - name: Check if snmp.yml was generated
+      stat:
+        path: /opt/snmp_exporter/generator/snmp.yml
+      register: snmp_yml_stat
+
+    - name: Install generated snmp.yml if available
+      copy:
+        src: /opt/snmp_exporter/generator/snmp.yml
+        dest: /etc/snmp_exporter/snmp.yml
+        remote_src: yes
+        mode: '0644'
+      when: snmp_yml_stat.stat.exists
+
+    - name: Install fallback snmp.yml if generator failed
+      template:
+        src: ../templates/snmp.yml.j2
+        dest: /etc/snmp_exporter/snmp.yml
+        mode: '0644'
+      when: not snmp_yml_stat.stat.exists
+
+    - name: Configure SNMP Exporter options
+      template:
+        src: ../templates/snmp_exporter.default.j2
+        dest: /etc/default/snmp_exporter
+        mode: '0644'
+
+    - name: Install SNMP Exporter systemd service
+      template:
+        src: ../templates/snmp_exporter.service.j2
+        dest: /etc/systemd/system/snmp_exporter.service
+        mode: '0644'
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start SNMP Exporter
+      systemd:
+        name: snmp_exporter
+        enabled: yes
+        state: started

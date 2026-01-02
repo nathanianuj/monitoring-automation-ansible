@@ -1,0 +1,14 @@
+[Unit]
+Description=Prometheus SNMP Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=root
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/etc/default/snmp_exporter
+ExecStart=/usr/local/bin/snmp_exporter $OPTIONS
+
+[Install]
+WantedBy=multi-user.target

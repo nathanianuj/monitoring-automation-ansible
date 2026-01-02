@@ -1,0 +1,16 @@
+# Ansible
+*.retry
+*.log
+
+# Python
+ansible-venv/
+__pycache__/
+
+# Secrets
+*.pem
+*.key
+*.vault_pass
+.vault_pass
+
+# OS
+.DS_Store

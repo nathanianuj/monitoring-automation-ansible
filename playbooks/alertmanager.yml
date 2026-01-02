@@ -1,0 +1,69 @@
+---
+- name: Install and configure Alertmanager
+  hosts: alertmanager
+  become: true
+
+  vars:
+    alertmanager_version: "0.28.1"
+    alertmanager_arch: "linux-amd64"
+    alertmanager_port: 9093
+
+    alertmanager_user: alertmanager
+    alertmanager_group: alertmanager
+
+    smtp_to: "anujasha27@gmail.com"
+    smtp_from: "anujnathani.mpct@gmail.com"
+    smtp_smarthost: "smtp.gmail.com:587"
+    smtp_username: "anujnathani.mpct@gmail.com"
+    smtp_password: "APP_PASSWORD_HERE"
+
+  tasks:
+    - name: Create alertmanager user
+      user:
+        name: "{{ alertmanager_user }}"
+        shell: /usr/sbin/nologin
+        system: yes
+
+    - name: Download Alertmanager
+      get_url:
+        url: "https://github.com/prometheus/alertmanager/releases/download/v{{ alertmanager_version }}/alertmanager-{{ alertmanager_version }}.{{ alertmanager_arch }}.tar.gz"
+        dest: /tmp/alertmanager.tar.gz
+        mode: '0644'
+
+    - name: Extract Alertmanager
+      unarchive:
+        src: /tmp/alertmanager.tar.gz
+        dest: /opt
+        remote_src: yes
+
+    - name: Create config directory
+      file:
+        path: /etc/alertmanager
+        state: directory
+        owner: "{{ alertmanager_user }}"
+        group: "{{ alertmanager_group }}"
+        mode: '0755'
+
+    - name: Deploy alertmanager.yml
+      template:
+        src: alertmanager.yml.j2
+        dest: /etc/alertmanager/alertmanager.yml
+        owner: "{{ alertmanager_user }}"
+        group: "{{ alertmanager_group }}"
+        mode: '0644'
+
+    - name: Install systemd service
+      template:
+        src: alertmanager.service.j2
+        dest: /etc/systemd/system/alertmanager.service
+        mode: '0644'
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Alertmanager
+      systemd:
+        name: alertmanager
+        enabled: yes
+        state: started

@@ -1,0 +1,21 @@
+---
+auths:
+  public_v3:
+    version: 3
+    username: {{ snmp_v3_user }}
+    security_level: authPriv
+    auth_protocol: {{ snmp_v3_auth_protocol }}
+    password: {{ snmp_v3_auth_password }}
+    priv_protocol: {{ snmp_v3_priv_protocol }}
+    priv_password: {{ snmp_v3_priv_password }}
+
+modules:
+  snmpv3_switch:
+    auth: public_v3
+    walk:
+      - 1.3.6.1.2.1.1
+      - 1.3.6.1.2.1.2
+      - 1.3.6.1.2.1.31.1.1
+    lookups:
+      - source_indexes: [ifIndex]
+        lookup: ifDescr
