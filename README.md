@@ -1,4 +1,4 @@
-# SNMP Exporter Automation with Ansible (SNMPv3)
+# Automation with Ansible (SNMPv3)
 
 This project automates the installation and configuration of **Prometheus SNMP Exporter**
 using **Ansible**, with support for **SNMPv3** and a **resilient generator + fallback design**.
